@@ -1,105 +1,141 @@
 {% extends 'base.html' %}
+
 {% block title %}
     <title>Dashboard</title>
 {% endblock %}
 
-{% block content %}
-    <div class="main_container">
-        {% if selected_range == 'select_date' %}
-            <div class="datepicker_container">
-                <form class="datepicker_form"
-                      action="{{ url_for('dashboard', selected_range=selected_range) }}">
-                    <label class="datepicker_item datepicker_label" for="datepicker">Select
-                        date</label>
-                    <input class="datepicker_item datepicker_date" type="date"
-                           id="datepicker" name="date"
-                           value="{{ request.args.get("date") }}" required>
-                    <button class="datepicker_item datepicker_button" type="submit"
-                            id="datepicker_button">Submit
-                    </button>
-                </form>
-            </div>
+{% block header %}
+    <h1 class="text-center">
+        {% if selected_range == 'past_day' %}
+            Last day
+        {% elif selected_range == 'past_month' %}
+            Last month
+        {% elif selected_range == 'past_year' %}
+            Last year
+        {% elif selected_range == 'select_date' %}
+            {% if not request.args.get("date_from") %}
+                Select dates
+            {% else %}
+                {{ request.args.get("date_from") }} to {{ request.args.get("date_to") }}
+            {% endif %}
         {% endif %}
-        {% for service in status_data %}
-            <div class="service_container">
-                <div class="chart_container">
-                    <h3 class="service_name">{{ service["service_name"] }}</h3>
-                    <div id="chart_{{ service["service_name"] }}"></div>
-                </div>
-                <div class="table_container">
-                    <table class="table">
-                        <tr>
-                            <th>Host</th>
-                            <th>Datetime</th>
-                            <th>Status</th>
-                        </tr>
-                        <div id="data_{{ service["service_name"] }}">
-                            {% for item in service["data"] %}
-                                <tr>
-                                    <td>{{ item["host"] }}</td>
-                                    <td>{{ item["datetime"] }}</td>
-                                    <td class="{% if item["status"] == "OK" %}status-green{% elif item["status"] == "WARNING" %}status-orange{% else %}status-red{% endif %}">{{ item["status"] }}</td>
-                                </tr>
-                            {% endfor %}
+    </h1>
+{% endblock %}
+
+{% block content %}
+    {% if selected_range == 'select_date' %}
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="accordion" id="accordion-dates">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#collapse-dates" aria-expanded="false"
+                                    aria-controls="collapse{{ service_id }}">
+                                    Select date range
+                            </button>
+                        </h2>
+                        {% if not request.args.get("date_from") %}
+                            {% set cls='show' %}
+                        {% else %}
+                            {% set cls='collapse' %}
+                        {% endif %}
+                        <div id="collapse-dates" class="accordion-collapse {{ cls }}">
+                            <div class="accordion-body">
+                                <form action="{{ url_for('dashboard', selected_range=selected_range) }}">
+                                    <div class="row">
+                                        <div class="col-12 col-sm-6">
+                                            <label for="datepicker_from">From</label>
+                                            <input class="form-control datepicker_date" type="date" id="datepicker_from" name="date_from"
+                                                   value="{{ request.args.get("date_from") }}" required>
+                                        </div>
+                                        <div class="col-12 col-sm-6">
+                                            <label for="datepicker_to">To</label>
+                                            <input class="form-control datepicker_date" type="date" id="datepicker_to" name="date_to"
+                                                   value="{{ request.args.get("date_to") }}" required>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-12">
+                                            <div class="d-grid">
+                                                <button type="submit" class="btn btn-primary">Submit</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
-                    </table>
+                    </div>
                 </div>
             </div>
-        {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if data %}
+    {% for service_id,service_data in data.items() %}
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="row mb-2">
+                <div class="col-12 col-sm-2">
+                    <h3>{{ service_data["display_name"] }}</h3>
+                </div>
+                <div class="col-12 col-sm-5">
+                    <h5 class="text-bg-success p-2">Uptime: {{ "%.5f"|format(service_data["uptime_data"]["OK"]) }}</h5>
+                </div>
+                <div class="col-12 col-sm-5">
+                    <h5 class="text-bg-danger p-2">Downtime: {{ "%.5f"|format(service_data["uptime_data"]["CRITICAL"]) }}</h5>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12">
+                    <div class="accordion" id="accordion{{ service_id }}">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#collapse{{ service_id }}" aria-expanded="false"
+                                        aria-controls="collapse{{ service_id }}">
+                                    Events
+                                </button>
+                            </h2>
+                            <div id="collapse{{ service_id }}" class="accordion-collapse collapse">
+                                <div class="accordion-body">
+                                    <table class="table">
+                                        <thead class="table-dark sticky-top">
+                                            <tr>
+                                                <th>Status</th>
+                                                <th>Host</th>
+                                                <th>Timestamp</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for item in service_data["status_data"] %}
+                                                <tr>
+                                                    {% if item["status"] == "OK" %}
+                                                        {% set cls='success' %}
+                                                    {% elif item["status"] == "WARNING" %}
+                                                        {% set cls='warning' %}
+                                                    {% else %}
+                                                        {% set cls='danger' %}
+                                                    {% endif %}
+                                                    <td class="text-bg-{{ cls }}">{{ item["status"] }}</td>
+                                                    <td>{{ item["host"] }}</td>
+                                                    <td>{{ item["datetime"] }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        <tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-
-    <script type="text/javascript"
-            src="https://www.gstatic.com/charts/loader.js"></script>
-    <script type="text/javascript">
-
-        google.charts.load('current', {'packages': ['corechart']})
-
-        google.charts.setOnLoadCallback(drawCharts)
-
-        function drawCharts() {
-            {{ charts_data|tojson }}.forEach(function draw_chart(chart_data) {
-                    var data = new google.visualization.DataTable()
-                    data.addColumn('string', 'Status')
-                    data.addColumn('number', '');
-                    var data_rows = [];
-                    // build slices
-                    if (chart_data["OK"] > 0) {
-                        data_rows.push(['OK', chart_data["OK"]])
-                    }
-                    if (chart_data["WARNING"] > 0) {
-                        data_rows.push(['WARNING', chart_data["WARNING"]])
-                    }
-                    if (chart_data["CRITICAL"] > 0) {
-                        data_rows.push(['CRITICAL', chart_data["CRITICAL"]])
-                    }
-                    data.addRows(data_rows);
-                    var colors = {
-                        'OK': 'green',
-                        'WARNING': 'orange',
-                        'CRITICAL': 'red'
-                    };
-                    var slices = [];
-                    for (var i = 0; i < data.getNumberOfRows(); i++) {
-                        slices.push({
-                            color: colors[data.getValue(i, 0)]
-                        });
-                    }
-
-                    var chart_options = {
-                        'is3D': true,
-                        'legend': {'position': "labeled"},
-                        'chartArea': {'width': "95%", 'height': "100%"},
-                        'slices': slices,
-                        'sliceVisibilityThreshold': 0
-                    }
-
-                    var chart_div = document.getElementById(`chart_${chart_data["service_name"]}`);
-
-
-                    var _3dchart = new google.visualization.PieChart(chart_div);
-                    _3dchart.draw(data, chart_options);
-                }
-            )
-        }
-    </script>
+    {% endfor %}
+    {% else %}
+        <div class="row mb-3">
+            <p class="text-muted">No data to show at the moment</p>
+        </div>
+    {% endif %}
 {% endblock %}

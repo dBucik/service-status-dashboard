@@ -1,0 +1,32 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+        <a href="/" class="navbar-brand">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" class="navbar-logo" alt="Logo">
+            <span class="m-3">LS Login Uptime metrics</span>
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse flex-row-reverse" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                  <a class="nav-link {% if selected_range == 'past_day' %}active{% endif %}"
+                     aria-current="page" href="/dashboard/past_day">Last day</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link {% if selected_range == 'past_month' %}active{% endif %}"
+                     aria-current="page" href="/dashboard/past_month">Last month</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link {% if selected_range == 'past_year' %}active{% endif %}"
+                     aria-current="page" href="/dashboard/past_year">Last Year</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link {% if selected_range == 'select_date' %}active{% endif %}"
+                     aria-current="page" href="/dashboard/select_date">Selected Range</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>

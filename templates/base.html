@@ -1,39 +1,29 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <meta name="viewport" content="initial-scale=1.0" />
-    {% block title %} {% endblock %}
-    {% block preload %}
-        <link href="/static/index.css" rel="stylesheet"/>
-        <link href="/static/header.css" rel="stylesheet"/>
-        <link href="/static/footer.css" rel="stylesheet"/>
-        <link href="/static/date_picker.css" rel="stylesheet"/>
-    {% endblock %}
-  </head>
-  <body>
-  <div class="page">
-    <header class="topbar">
-        <img class="logo" src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo">
-        <button id="past_day_button" {% if selected_range == 'past_day' %}class="active"{% else %} onclick="window.location.href='/dashboard/past_day'"{% endif %}>Past Day</button>
-        <button id="past_month_button" {% if selected_range == 'past_month' %}class="active"{% else %} onclick="window.location.href='/dashboard/past_month'"{% endif %}>Past Month</button>
-        <button id="past_year_button" {% if selected_range == 'past_year' %}class="active"{% else %} onclick="window.location.href='/dashboard/past_year'"{% endif %}>Past Year</button>
-        <button id="select_date_button" {% if selected_range == 'select_date' %}class="active"{% else %} onclick="window.location.href='/dashboard/select_date'"{% endif %}>Select Date</button>
-    </header>
-
-    {% block content %}{% endblock %}
-
-    <footer class="footer bg-dark">
-        <div class="footer-content">
-            <img class="footer-logo" src="{{ url_for('static', filename='images/flag_eu.png') }}" alt="Footer Logo">
-            <p class="footer-text">This project has received funding from the European Union’s Horizon 2020 research and innovation programme under grant agreement No 654248.</p>
-            <div class="footer-links">
-                <a href="https://lifescience-ri.eu/contact.html" class="footer-link">Contact</a>
-                <a href="https://lifescience-ri.eu/imprint.html" class="footer-link">Imprint</a>
-                <a href="https://lifescience-ri.eu/privacy-policy.html" class="footer-link">Privacy policy</a>
-            </div>
-        </div>
-    </footer>
-  </div>
-  </body>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="initial-scale=1.0" />
+{% block title %}
+    <title>Uptime statistics</title>
+{% endblock %}
+{% block preload %}
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet" type="text/css">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet" type="text/css">
+    <link href="{{ url_for('static', filename='css/date_picker.css') }}" rel="stylesheet" type="text/css">
+{% endblock %}
+</head>
+<body class="d-flex flex-column">
+    {%  include '_navbar.html' %}
+    <div class="container flex-grow-1">
+        <header class="row mt-3 mb-4">
+            {% block header %}
+                Uptime metrics
+            {% endblock %}
+        </header>
+        {% block content %}{% endblock %}
+    </div>
+    {%  include '_footer.html' %}
+</body>
+<script src="{{ url_for('static', filename='js/jquery.js') }}"></script>
+<script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
 </html>

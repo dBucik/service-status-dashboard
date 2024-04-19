@@ -9,7 +9,7 @@ import mysql.connector
 
 app = Flask(__name__)
 
-with open("./status-dashboard.yaml", "r") as yaml_file:
+with open("/etc/status-dashboard/status-dashboard.yaml", "r") as yaml_file:
     cfg = yaml.safe_load(yaml_file)
 
 database = mysql.connector.connect(
@@ -26,152 +26,207 @@ OK = "OK"
 WARNING = "WARNING"
 CRITICAL = "CRITICAL"
 
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-def uptime_db_to_dict(db_data, display_name, converted_data=None):
+
+def status_db_parse(db_data):
     if not db_data:
         return {}
-    if not converted_data:
-        converted_data = {"service_name": display_name, OK: 0, WARNING: 0, CRITICAL: 0}
+    converted_data = []
     for row in db_data:
-        uptime = row[0]
-        downtime = row[1]
-        warntime = row[2]
-        converted_data[OK] += uptime
-        converted_data[WARNING] += warntime
-        converted_data[CRITICAL] += downtime
+        converted_data.append(status_db_parse_entry(row))
     return converted_data
 
 
-def status_db_to_dict(db_data, display_name):
-    if not db_data:
-        return {}
-    converted_data = {"service_name": display_name, "data": []}
-    for row in db_data:
-        event_time = row[0]
+def status_db_parse_entry(row):
+    if row and len(row) == 3 and row[0] and row[1] and row[2]:
         status = row[1]
-        host = row[2]
-
-        event = {"datetime": event_time.strftime("%m/%d/%Y %H:%M:%S"),
-                 "status": status,
-                 "host": host}
-        converted_data["data"].append(event)
-    return converted_data
+        return {"datetime": row[0].strftime(DATE_FORMAT), "status": status, "host": row[2]}
+    else:
+        return None
 
 
-def calculate_service_uptime(cursor, sql_condition, first_status_condition, first_status_from,
-                             last_status_up_to):
-    cursor.execute(f"SELECT status FROM {status_table} {first_status_condition} ORDER BY event_time DESC LIMIT 1 ;")
-    status_list = []
-    first_status = cursor.fetchall()
+def calculate_service_uptime(cursor, service, host, start_date, end_date):
     cursor.execute(
-        f"SELECT event_time, status FROM {status_table} {sql_condition} ORDER BY event_time ASC;;")
+        f"SELECT timestamp('{start_date}'), status"
+        f" FROM {status_table}"
+        f" WHERE event_time <= '{start_date}'"
+        f" AND service = '{service}'"
+        f" AND host = '{host}'"
+        f" ORDER BY event_time DESC LIMIT 1"
+    )
+    first_status = cursor.fetchall()
+
+    cursor.execute(
+        f"SELECT event_time, status"
+        f" FROM {status_table}"
+        f" WHERE event_time BETWEEN '{start_date}' AND '{end_date}'"
+        f" AND service = '{service}'"
+        f" AND host = '{host}'"
+        f" ORDER BY event_time ASC"
+    )
     data = cursor.fetchall()
-    if first_status and data:
-        status_list.append({"time": first_status_from, "status": first_status[0][0]})
+
+    cursor.execute(
+        f"SELECT timestamp('{end_date}'), status"
+        f" FROM {status_table}"
+        f" WHERE event_time <= '{end_date}'"
+        f" AND service = '{service}'"
+        f" AND host = '{host}'"
+        f" ORDER BY event_time DESC LIMIT 1"
+    )
+    last_status = cursor.fetchall()
+
     status_list = []
-    for row in data:
-        event_time = row[0]
-        status = row[1]
-        status_list.append({"time": event_time, "status": status})
+    if first_status:
+        status_list.append({"time": first_status[0][0], "status": first_status[0][1]})
+
+    if data:
+        for row in data:
+            event_time = row[0]
+            status = row[1]
+            status_list.append({"time": event_time, "status": status})
+
+    if last_status:
+        status_list.append({"time": last_status[0][0], "status": last_status[0][1]})
 
     status_uptime = {OK: 0, WARNING: 0, CRITICAL: 0}
+    if len(status_list) == 2:
+        start = status_list[0]
+        end = status_list[1]
+        status_uptime[start["status"]] = int((end["time"] - start["time"]).total_seconds())
+    else:
+        prev_status = ""
+        prev_time = 0
+        for status in status_list:
+            if not prev_status:
+                prev_status = status["status"]
+                prev_time = status["time"]
+                continue
+            if status["status"] != prev_status:
+                status_uptime[prev_status] += int((status["time"] - prev_time).total_seconds())
+                prev_status = status["status"]
+                prev_time = status["time"]
 
-    prev_status = ""
-    prev_time = 0
-    for status in status_list:
-        if not prev_status:
-            prev_status = status["status"]
-            prev_time = status["time"]
-            continue
-        status_uptime[prev_status] += int((status["time"] - prev_time).total_seconds())
-        prev_status = status["status"]
-        prev_time = status["time"]
-    if prev_status:
-        status_uptime[prev_status] += int(
-            (last_status_up_to - prev_time).total_seconds())
-    if (status_uptime[OK] == 0 and status_uptime[WARNING] == 0
-            and status_uptime[CRITICAL] == 0):
+    if status_uptime[OK] == 0 and status_uptime[WARNING] == 0 and status_uptime[CRITICAL] == 0:
         return {}
     return status_uptime
 
 
-def get_charts_data(db_cursor, sql_condition, first_status_from, last_status_up_to):
-    charts_data = []
-    charts_dict = {}
-    db_cursor.execute(f"SELECT DISTINCT service, host FROM {status_table};")
+def get_uptime_data(db_cursor, start_date, end_date, service):
+    uptime_data = None
+    db_cursor.execute(f"SELECT DISTINCT host FROM {status_table}")
+
     for row in db_cursor.fetchall():
-        service_db_name = row[0]
-        host = row[1]
-        display_name = service_db_name if cfg["services"].get(
-            service_db_name) is None else cfg["services"][service_db_name]
-        status_uptime = calculate_service_uptime(db_cursor,
-                                                 f"{sql_condition} AND service = '{service_db_name}' AND host = '{host}'",
-                                                 f"WHERE event_time < '{first_status_from}' AND service = '{service_db_name}' AND host = '{host}'",
-                                                 first_status_from,
-                                                 last_status_up_to)
+        host = row[0]
+        status_uptime = calculate_service_uptime(
+            db_cursor,
+            service,
+            host,
+            start_date,
+            end_date
+        )
         if not status_uptime:
             continue
-        if not charts_dict.get(display_name):
-            charts_dict[display_name] = status_uptime
+        if not uptime_data:
+            uptime_data = status_uptime
         else:
-            status_uptime[OK] += charts_dict[display_name][OK]
-            status_uptime[WARNING] += charts_dict[display_name][WARNING]
-            status_uptime[CRITICAL] += charts_dict[display_name][CRITICAL]
-    for key, value in charts_dict.items():
-        charts_data.append(
-            {"service_name": key, OK: value[OK], WARNING: value[WARNING],
-             CRITICAL: value[CRITICAL]})
-    return charts_data
+            uptime_data[OK] += status_uptime[OK]
+            uptime_data[WARNING] += status_uptime[WARNING]
+            uptime_data[CRITICAL] += status_uptime[CRITICAL]
+    total = uptime_data[OK] + uptime_data[WARNING] + uptime_data[CRITICAL]
+    return {
+        OK: (uptime_data[OK] + uptime_data[WARNING])/total * 100,
+        CRITICAL: uptime_data[CRITICAL]/total * 100
+    }
 
 
-def get_status_data(db_cursor, sql_condition):
-    status_data = []
-    db_cursor.execute(f"SELECT DISTINCT service FROM {status_table};")
-    for row in db_cursor.fetchall():
-        service_db_name = row[0]
-        display_name = service_db_name if cfg["services"].get(
-            service_db_name) is None else cfg["services"][service_db_name]
-
+def get_status_data(db_cursor, start_date, end_date, service):
+    events = []
+    db_cursor.execute(f"SELECT DISTINCT host FROM {status_table}")
+    for host_row in db_cursor.fetchall():
+        host = host_row[0]
         db_cursor.execute(
-            f"SELECT event_time, status, host FROM {status_table} "
-            f"{sql_condition} AND service = '{service_db_name}' ORDER BY event_time DESC;;")
-        service_status_data = status_db_to_dict(db_cursor.fetchall(), display_name)
-        if service_status_data:
-            status_data.append(service_status_data)
-    return status_data
+            f"SELECT timestamp('{start_date}'), status, host"
+            f" FROM {status_table}"
+            f" WHERE event_time <= '{start_date}'"
+            f" AND service = '{service}'"
+            f" AND host = '{host}'"
+            f" ORDER BY event_time DESC LIMIT 1"
+        )
+        first_status = db_cursor.fetchall()
+        if first_status:
+            events.append(status_db_parse_entry(first_status[0]))
+
+    db_cursor.execute(
+        f"SELECT event_time, status, host"
+        f" FROM {status_table}"
+        f" WHERE event_time BETWEEN '{start_date}' AND '{end_date}'"
+        f" AND service = '{service}'"
+        f" ORDER BY event_time DESC"
+    )
+
+    parsed_data = status_db_parse(db_cursor.fetchall())
+    if parsed_data:
+        prev_status = ""
+        prev_time = 0
+        prev_host = ""
+        for entry in parsed_data:
+            if not prev_status and not prev_time and not prev_host:
+                prev_status = entry["status"]
+                prev_time = entry["datetime"]
+                prev_host = entry["host"]
+            if entry["status"] != prev_status:
+                prev_status = entry["status"]
+                prev_time = entry["datetime"]
+                prev_host = entry["host"]
+                events.append(entry)
+    return events
 
 
-def get_status_charts_data(period):
+def get_data(start_date, end_date):
+    data = {}
     db_cursor = database.cursor()
-    sql_condition = f"WHERE event_time >= NOW() - INTERVAL 1 {period}"
-    status_data = get_status_data(db_cursor, sql_condition)
+    db_cursor.execute(f"SELECT DISTINCT service FROM {status_table}")
+    for service_row in db_cursor.fetchall():
+        service = service_row[0]
+        name = cfg["services"][service] if "services" in cfg and service in cfg["services"] else service
+        status_data = get_status_data(db_cursor, start_date, end_date, service)
+        uptime_data = get_uptime_data(db_cursor, start_date, end_date, service)
+        data[service] = {
+            "display_name": name,
+            "status_data": status_data,
+            "uptime_data": uptime_data
+        }
+    db_cursor.close()
+    database.commit()
+    return data
+
+
+def get_data_for_period(period):
+    today = datetime.now().date()
+    end_date = datetime(today.year, today.month, today.day, 23, 59, 59) - timedelta(days=1)
     if period == "DAY":
-        first_status_from = datetime.now() - timedelta(days=1)
+        start_date = datetime(today.year, today.month, today.day, 0, 0, 0) - timedelta(days=1)
     elif period == "MONTH":
-        first_status_from = datetime.now() - relativedelta(months=1)
+        start_date = datetime(today.year, today.month, today.day, 0, 0, 0) - relativedelta(months=1, days=1)
     else:
-        first_status_from = datetime.now() - relativedelta(year=1)
-
-    charts_data = get_charts_data(db_cursor, sql_condition, first_status_from,
-                                  datetime.now())
-    db_cursor.close()
-    database.commit()
-    return status_data, charts_data
+        start_date = datetime(today.year, today.month, today.day, 0, 0, 0) - relativedelta(years=1, days=1)
+    return get_data(start_date, end_date)
 
 
-def get_status_charts_data_for_date(date):
-    db_cursor = database.cursor()
-    start_date = date + ' 00:00:00'
-    end_date = date + ' 23:59:59'
-    date_format = "%Y-%m-%d %H:%M:%S"
-    sql_condition = f"WHERE event_time BETWEEN '{start_date}' AND '{end_date}'"
-    status_data = get_status_data(db_cursor, sql_condition)
-    charts_data = get_charts_data(db_cursor, sql_condition,
-                                  datetime.strptime(start_date, date_format),
-                                  datetime.strptime(end_date, date_format))
-    db_cursor.close()
-    database.commit()
-    return status_data, charts_data
+def get_data_between_dates(date_from, date_to):
+    date_from = date_from + ' 00:00:00'
+    date_to = date_to + ' 23:59:59'
+    start_date = datetime.strptime(date_from, DATE_FORMAT)
+    end_date = datetime.strptime(date_to, DATE_FORMAT)
+    if end_date < start_date:
+        # FIXME - generate error instead
+        tmp_date = end_date
+        end_date = start_date
+        start_date = tmp_date
+
+    return get_data(start_date, end_date)
 
 
 @app.route('/')
@@ -179,27 +234,35 @@ def home():
     return redirect(url_for('dashboard', selected_range="past_day"))
 
 
-@app.route('/dashboard/<selected_range>')
+@app.route('/dashboard/<selected_range>/')
 def dashboard(selected_range):
-    status_data = []
-    charts_data = []
-
+    data = []
     if selected_range == "select_date":
-        date = request.args.get("date")
-        if date is None:
-            return render_template("dashboard.html", selected_range="select_date",
-                                   charts_data=charts_data, status_data=status_data)
-        status_data, charts_data = get_status_charts_data_for_date(date)
-        return render_template('dashboard.html', selected_range="select_date",
-                               charts_data=charts_data, status_data=status_data, )
+        date_from = request.args.get("date_from")
+        date_to = request.args.get("date_to")
+        if date_from is None or date_to is None:
+            return render_template(
+                "dashboard.html",
+                selected_range="select_date",
+                data = data
+            )
+        data = get_data_between_dates(date_from, date_to)
+        return render_template(
+            'dashboard.html',
+            selected_range="select_date",
+            data=data
+        )
 
     range_to_sql = {"past_day": "DAY", "past_month": "MONTH", "past_year": "YEAR"}
     if selected_range not in range_to_sql.keys():
         return redirect(url_for('dashboard', selected_range="past_day"))
 
-    status_data, charts_data = get_status_charts_data(range_to_sql[selected_range])
-    return render_template('dashboard.html', charts_data=charts_data,
-                           status_data=status_data, selected_range=selected_range)
+    data = get_data_for_period(range_to_sql[selected_range])
+    return render_template(
+        'dashboard.html',
+        data=data,
+        selected_range=selected_range
+    )
 
 
 if __name__ == '__main__':

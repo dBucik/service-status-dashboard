@@ -1,0 +1,41 @@
+body {
+  min-height: 100vh;
+}
+
+.navbar-logo {
+  max-height: 50px;
+  height: 100%;
+  width: auto;
+}
+
+.clickable-row:hover {
+  cursor: pointer;
+}
+
+.accordion-collapse {
+  max-height: 20vh;
+  overflow-y: scroll;
+}
+
+footer {
+  padding-top: .5em;
+  padding-bottom: .5em;
+}
+
+.img-wrap {
+  text-align: center;
+}
+
+.img-wrap img {
+  margin: auto;
+}
+
+#footer-ls-logo {
+  padding-top: 0.5em;
+}
+
+#footer-ls-logo img,
+#footer-eu-flag img {
+  max-width: 120px;
+  margin: auto;
+}
