@@ -4,8 +4,8 @@ database:
   password: password
   database: status_dashboard
   status_table: dashboard_events
-  uptime_table: service_uptime
 
 services:
   auth_saml: Auth Saml
-  auth_saml3: Auth Saml3
+  auth_oidc: Auth OIDC
+  privacyidea: MFA

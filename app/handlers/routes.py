@@ -1,25 +1,24 @@
 from datetime import datetime, timedelta
 
 from dateutil.relativedelta import relativedelta
-from flask import Flask, render_template, redirect, url_for, request
-import db
+from flask import redirect, url_for, request, render_template, current_app
 
-import yaml
-
-
-app = Flask(__name__)
-
-with open("/Users/nayriva/WORK/service-status-dashboard/status-dashboard.yaml", "r") as yaml_file:
-    cfg = yaml.safe_load(yaml_file)
-
-status_table = cfg["database"]["status_table"]
-uptime_table = cfg["database"]["uptime_table"]
+from app import db
+from app.handlers import bp as blueprint
 
 OK = "OK"
 WARNING = "WARNING"
 CRITICAL = "CRITICAL"
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+def get_db_conf():
+    return current_app.config.get('DATABASE')
+
+
+def get_services_conf():
+    return current_app.config.get('SERVICES')
 
 
 def status_db_parse(db_data):
@@ -42,7 +41,7 @@ def status_db_parse_entry(row):
 def calculate_service_uptime(cursor, service, host, start_date, end_date):
     cursor.execute(
         f"SELECT timestamp('{start_date}'), status"
-        f" FROM {status_table}"
+        f" FROM {get_db_conf()['status_table']}"
         f" WHERE event_time <= '{start_date}'"
         f" AND service = '{service}'"
         f" AND host = '{host}'"
@@ -52,7 +51,7 @@ def calculate_service_uptime(cursor, service, host, start_date, end_date):
 
     cursor.execute(
         f"SELECT event_time, status"
-        f" FROM {status_table}"
+        f" FROM {get_db_conf()['status_table']}"
         f" WHERE event_time BETWEEN '{start_date}' AND '{end_date}'"
         f" AND service = '{service}'"
         f" AND host = '{host}'"
@@ -62,7 +61,7 @@ def calculate_service_uptime(cursor, service, host, start_date, end_date):
 
     cursor.execute(
         f"SELECT timestamp('{end_date}'), status"
-        f" FROM {status_table}"
+        f" FROM {get_db_conf()['status_table']}"
         f" WHERE event_time <= '{end_date}'"
         f" AND service = '{service}'"
         f" AND host = '{host}'"
@@ -108,7 +107,7 @@ def calculate_service_uptime(cursor, service, host, start_date, end_date):
 
 def get_uptime_data(db_cursor, start_date, end_date, service):
     uptime_data = None
-    db_cursor.execute(f"SELECT DISTINCT host FROM {status_table}")
+    db_cursor.execute(f"SELECT DISTINCT host FROM {get_db_conf()['status_table']}")
 
     for row in db_cursor.fetchall():
         host = row[0]
@@ -136,12 +135,12 @@ def get_uptime_data(db_cursor, start_date, end_date, service):
 
 def get_status_data(db_cursor, start_date, end_date, service):
     events = []
-    db_cursor.execute(f"SELECT DISTINCT host FROM {status_table}")
+    db_cursor.execute(f"SELECT DISTINCT host FROM {get_db_conf()['status_table']}")
     for host_row in db_cursor.fetchall():
         host = host_row[0]
         db_cursor.execute(
             f"SELECT timestamp('{start_date}'), status, host"
-            f" FROM {status_table}"
+            f" FROM {get_db_conf()['status_table']}"
             f" WHERE event_time <= '{start_date}'"
             f" AND service = '{service}'"
             f" AND host = '{host}'"
@@ -153,7 +152,7 @@ def get_status_data(db_cursor, start_date, end_date, service):
 
     db_cursor.execute(
         f"SELECT event_time, status, host"
-        f" FROM {status_table}"
+        f" FROM {get_db_conf()['status_table']}"
         f" WHERE event_time BETWEEN '{start_date}' AND '{end_date}'"
         f" AND service = '{service}'"
         f" ORDER BY event_time DESC"
@@ -179,12 +178,13 @@ def get_status_data(db_cursor, start_date, end_date, service):
 
 def get_data(start_date, end_date):
     data = {}
-    database = db.get_db(cfg=cfg)
+    database = db.get_db(cfg=get_db_conf())
     db_cursor = database.cursor()
-    db_cursor.execute(f"SELECT DISTINCT service FROM {status_table}")
+    db_cursor.execute(f"SELECT DISTINCT service FROM {get_db_conf()['status_table']}")
     for service_row in db_cursor.fetchall():
         service = service_row[0]
-        name = cfg["services"][service] if "services" in cfg and service in cfg["services"] else service
+        config = get_services_conf()
+        name = config[service] if service in config else service
         status_data = get_status_data(db_cursor, start_date, end_date, service)
         uptime_data = get_uptime_data(db_cursor, start_date, end_date, service)
         data[service] = {
@@ -223,12 +223,12 @@ def get_data_between_dates(date_from, date_to):
     return get_data(start_date, end_date)
 
 
-@app.route('/')
+@blueprint.route('/')
 def home():
-    return redirect(url_for('dashboard', selected_range="past_day"))
+    return redirect(url_for('dashboard.dashboard', selected_range="past_day"))
 
 
-@app.route('/dashboard/<selected_range>/')
+@blueprint.route('/dashboard/<selected_range>/')
 def dashboard(selected_range):
     data = []
     if selected_range == "select_date":
@@ -238,7 +238,7 @@ def dashboard(selected_range):
             return render_template(
                 "dashboard.html",
                 selected_range="select_date",
-                data = data
+                data=data
             )
         data = get_data_between_dates(date_from, date_to)
         return render_template(
@@ -257,7 +257,3 @@ def dashboard(selected_range):
         data=data,
         selected_range=selected_range
     )
-
-
-if __name__ == '__main__':
-    app.run(port=8080)

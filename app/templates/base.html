@@ -9,7 +9,6 @@
 {% block preload %}
     <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet" type="text/css">
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet" type="text/css">
-    <link href="{{ url_for('static', filename='css/date_picker.css') }}" rel="stylesheet" type="text/css">
 {% endblock %}
 </head>
 <body class="d-flex flex-column">
@@ -24,6 +23,7 @@
     </div>
     {%  include '_footer.html' %}
 </body>
-<script src="{{ url_for('static', filename='js/jquery.js') }}"></script>
+<script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </html>
