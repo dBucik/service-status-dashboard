@@ -2,22 +2,15 @@ from datetime import datetime, timedelta
 
 from dateutil.relativedelta import relativedelta
 from flask import Flask, render_template, redirect, url_for, request
+import db
 
 import yaml
 
-import mysql.connector
 
 app = Flask(__name__)
 
-with open("/etc/status-dashboard/status-dashboard.yaml", "r") as yaml_file:
+with open("/Users/nayriva/WORK/service-status-dashboard/status-dashboard.yaml", "r") as yaml_file:
     cfg = yaml.safe_load(yaml_file)
-
-database = mysql.connector.connect(
-    host=cfg["database"]["host"],
-    user=cfg["database"]["user"],
-    password=cfg["database"]["password"],
-    database=cfg["database"]["database"],
-)
 
 status_table = cfg["database"]["status_table"]
 uptime_table = cfg["database"]["uptime_table"]
@@ -186,6 +179,7 @@ def get_status_data(db_cursor, start_date, end_date, service):
 
 def get_data(start_date, end_date):
     data = {}
+    database = db.get_db(cfg=cfg)
     db_cursor = database.cursor()
     db_cursor.execute(f"SELECT DISTINCT service FROM {status_table}")
     for service_row in db_cursor.fetchall():
