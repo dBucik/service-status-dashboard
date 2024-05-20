@@ -42,7 +42,7 @@ def calculate_service_uptime(cursor, service, host, start_date, end_date):
     cursor.execute(
         f"SELECT timestamp('{start_date}'), status"
         f" FROM {get_db_conf()['status_table']}"
-        f" WHERE event_time <= '{start_date}'"
+        f" WHERE event_time < '{start_date}'"
         f" AND service = '{service}'"
         f" AND host = '{host}'"
         f" ORDER BY event_time DESC LIMIT 1"
@@ -62,7 +62,7 @@ def calculate_service_uptime(cursor, service, host, start_date, end_date):
     cursor.execute(
         f"SELECT timestamp('{end_date}'), status"
         f" FROM {get_db_conf()['status_table']}"
-        f" WHERE event_time <= '{end_date}'"
+        f" WHERE event_time < '{end_date}'"
         f" AND service = '{service}'"
         f" AND host = '{host}'"
         f" ORDER BY event_time DESC LIMIT 1"
@@ -134,45 +134,46 @@ def get_uptime_data(db_cursor, start_date, end_date, service):
 
 
 def get_status_data(db_cursor, start_date, end_date, service):
-    events = []
+    events = {}
+
     db_cursor.execute(f"SELECT DISTINCT host FROM {get_db_conf()['status_table']}")
     for host_row in db_cursor.fetchall():
         host = host_row[0]
         db_cursor.execute(
             f"SELECT timestamp('{start_date}'), status, host"
             f" FROM {get_db_conf()['status_table']}"
-            f" WHERE event_time <= '{start_date}'"
+            f" WHERE event_time < '{start_date}'"
             f" AND service = '{service}'"
             f" AND host = '{host}'"
             f" ORDER BY event_time DESC LIMIT 1"
         )
         first_status = db_cursor.fetchall()
         if first_status:
-            events.append(status_db_parse_entry(first_status[0]))
+            first_status = status_db_parse_entry(first_status[0])
+            events[host] = []
+            events[host].append(first_status)
 
     db_cursor.execute(
         f"SELECT event_time, status, host"
         f" FROM {get_db_conf()['status_table']}"
         f" WHERE event_time BETWEEN '{start_date}' AND '{end_date}'"
         f" AND service = '{service}'"
-        f" ORDER BY event_time DESC"
+        f" ORDER BY event_time ASC"
     )
 
     parsed_data = status_db_parse(db_cursor.fetchall())
     if parsed_data:
-        prev_status = ""
-        prev_time = 0
-        prev_host = ""
+        prev_by_host = {}
         for entry in parsed_data:
-            if not prev_status and not prev_time and not prev_host:
-                prev_status = entry["status"]
-                prev_time = entry["datetime"]
-                prev_host = entry["host"]
-            if entry["status"] != prev_status:
-                prev_status = entry["status"]
-                prev_time = entry["datetime"]
-                prev_host = entry["host"]
-                events.append(entry)
+            host = entry["host"]
+            if host not in prev_by_host:
+                prev_by_host[host] = entry
+                events[host].append(entry)
+            if entry["status"] != prev_by_host[host]["status"]:
+                prev_by_host[host] = entry
+                events[host].append(entry)
+    for _, events_of_host in events.items():
+        events_of_host.reverse()
     return events
 
 
