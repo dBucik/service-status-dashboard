@@ -1,6 +1,7 @@
 from flask import Flask
 
-from app import db, config
+from app import config
+from app.storage import db
 
 
 def create_app():

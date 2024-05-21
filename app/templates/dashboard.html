@@ -42,7 +42,7 @@
                         {% endif %}
                         <div id="collapse-dates" class="accordion-collapse {{ cls }}">
                             <div class="accordion-body">
-                                <form action="{{ url_for('dashboard', selected_range=selected_range) }}">
+                                <form action="{{ url_for('dashboard.dashboard', selected_range=selected_range) }}">
                                     <div class="row">
                                         <div class="col-12 col-sm-6">
                                             <label for="datepicker_from">From</label>
@@ -89,46 +89,48 @@
             <div class="row">
                 <div class="col-12">
                     {% for host, host_data in service_data["status_data"].items() %}
-                        <div class="accordion" id="accordion{{ service_id }}">
-                            <div class="accordion-item">
-                                <h2 class="accordion-header">
-                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#collapse-{{ service_id }}-{{ host }}" aria-expanded="false"
-                                            aria-controls="collapse-{{ service_id }}-{{ host }}">
-                                        Events of {{ host }}
-                                    </button>
-                                </h2>
-                                <div id="collapse-{{ service_id }}-{{ host }}" class="accordion-collapse collapse">
-                                    <div class="accordion-body">
-                                        <table class="table">
-                                            <thead class="table-dark sticky-top">
-                                                <tr>
-                                                    <th>Status</th>
-                                                    <th>Host</th>
-                                                    <th>Timestamp</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {% for item in host_data %}
+                        {% if host_data %}
+                            <div class="accordion" id="accordion{{ service_id }}">
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                                data-bs-target="#collapse-{{ service_id }}-{{ host }}" aria-expanded="false"
+                                                aria-controls="collapse-{{ service_id }}-{{ host }}">
+                                            Events of {{ host }}
+                                        </button>
+                                    </h2>
+                                    <div id="collapse-{{ service_id }}-{{ host }}" class="accordion-collapse collapse">
+                                        <div class="accordion-body">
+                                            <table class="table">
+                                                <thead class="table-dark sticky-top">
                                                     <tr>
-                                                        {% if item["status"] == "OK" %}
-                                                            {% set cls='success' %}
-                                                        {% elif item["status"] == "WARNING" %}
-                                                            {% set cls='warning' %}
-                                                        {% else %}
-                                                            {% set cls='danger' %}
-                                                        {% endif %}
-                                                        <td class="text-bg-{{ cls }}">{{ item["status"] }}</td>
-                                                        <td>{{ item["host"] }}</td>
-                                                        <td>{{ item["datetime"] }}</td>
+                                                        <th>Status</th>
+                                                        <th>Host</th>
+                                                        <th>Timestamp</th>
                                                     </tr>
-                                                {% endfor %}
-                                            <tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody>
+                                                    {% for item in host_data %}
+                                                        <tr>
+                                                            {% if item["status"] == "OK" %}
+                                                                {% set cls='success' %}
+                                                            {% elif item["status"] == "WARNING" %}
+                                                                {% set cls='warning' %}
+                                                            {% else %}
+                                                                {% set cls='danger' %}
+                                                            {% endif %}
+                                                            <td class="text-bg-{{ cls }}">{{ item["status"] }}</td>
+                                                            <td>{{ item["host"] }}</td>
+                                                            <td>{{ item["time"].strftime("%Y-%m-%d %H:%M:%S") }}</td>
+                                                        </tr>
+                                                    {% endfor %}
+                                                <tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        {% endif %}
                     {% endfor %}
                 </div>
             </div>
