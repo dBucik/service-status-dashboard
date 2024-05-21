@@ -1,5 +1,3 @@
-from datetime import datetime
-
 import mysql.connector
 from flask import g, current_app
 
@@ -89,3 +87,18 @@ def get_events_between(host, service, start_date, end_date):
     db_cursor.close()
     database.commit()
     return mapper.map_events(data)
+
+
+def insert_event(host, status, monitored_service):
+    database = get_db(cfg=get_db_conf())
+    db_cursor = database.cursor()
+    db_cursor.execute(f"""
+            INSERT INTO {get_db_conf()['status_table']}(host, status, service, event_time)
+            VALUES (%(host)s, %(status)s, %(service)s, NOW())
+        """, {
+        'host': host,
+        'status': status,
+        'service': monitored_service
+    })
+    db_cursor.close()
+    database.commit()

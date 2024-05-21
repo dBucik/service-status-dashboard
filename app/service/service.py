@@ -9,6 +9,8 @@ OK = "OK"
 WARNING = "WARNING"
 CRITICAL = "CRITICAL"
 
+STATUSES = [OK, WARNING, CRITICAL]
+
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
@@ -139,3 +141,10 @@ def get_data_between_dates(date_from, date_to):
         start_date = tmp_date
 
     return get_data(start_date, end_date)
+
+
+def insert_record(host, status, monitored_service):
+    host = host.strip()
+    status = status.strip()
+    monitored_service = monitored_service.strip()
+    db.insert_event(host, status, monitored_service)
